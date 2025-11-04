@@ -1,24 +1,359 @@
-# Compiled class file
-*.class
+package br.mackenzie;
 
-# Log file
-*.log
+import com.badlogic.gdx.ApplicationListener;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.utils.ScreenUtils;
+import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.graphics.OrthographicCamera;
 
-# BlueJ files
-*.ctxt
+public class Main implements ApplicationListener {
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+    private SpriteBatch spriteBatch;
+    private FitViewport viewport;
+    private OrthographicCamera camera;
 
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
+    private Texture background;
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+    // Sprites dos personagens
+    private Texture[] playerBase = new Texture[3]; // idle, dano, fatal
+    private Texture[] enemyBase = new Texture[3];
+    private Texture[] playerGolpes = new Texture[3];
+    private Texture[] enemyGolpes = new Texture[3];
+
+    private Texture heartFull, heartEmpty;
+    private Texture count3, count2, count1;
+    private Texture[] barras = new Texture[7];
+    private Texture venceuImg, perdeuImg;
+
+    private Music backgroundMusic;
+    private Sound punchSound;
+
+    private float playerX, playerYBase;
+    private float enemyX, enemyYBase;
+
+    private int playerLives = 3;
+    private int enemyLives = 3;
+    private final int MAX_LIVES = 3;
+
+    // Controle de animações
+    private Texture playerAtual;
+    private Texture enemyAtual;
+    private float tempoAnimacao = 0f;
+    private final float DURACAO_ANIMACAO = 0.5f;
+    private boolean animando = false;
+
+    private int indiceGolpePlayer = 0;
+    private int indiceGolpeEnemy = 0;
+
+    // Movimento idle (oscilação)
+    private float tempoIdle = 0f;
+    private final float AMPLITUDE_IDLE = 3f; // altura do movimento
+    private final float FREQUENCIA_IDLE = 2f; // velocidade da oscilação (2 ciclos/s)
+
+    // Mecânica principal
+    private int pedaladas;
+    private float tempo;
+    private final float LIMITE_TEMPO = 7f;
+    private final int META_PEDALADAS = 20;
+
+    // Controle de contagem
+    private boolean emContagem = true;
+    private float tempoContagem = 0f;
+    private final float DURACAO_CONTAGEM = 3f;
+
+    private boolean jogoAtivo = true;
+    private boolean jogadorVenceu = false;
+
+    // Delay entre rounds
+    private boolean aguardandoProximoRound = false;
+    private float tempoAguardar = 0f;
+    private final float DELAY_NORMAL = 0.3f;
+    private final float DELAY_FATAL = 1.5f;
+    private float delayAtual = DELAY_NORMAL;
+
+    @Override
+    public void create() {
+        camera = new OrthographicCamera();
+        viewport = new FitViewport(800, 480, camera);
+        spriteBatch = new SpriteBatch();
+
+        background = new Texture("background1.jpg");
+        heartFull = new Texture("heart_full.png");
+        heartEmpty = new Texture("heart_empty.png");
+
+        count3 = new Texture("3.png");
+        count2 = new Texture("2.png");
+        count1 = new Texture("1.png");
+
+        for (int i = 0; i < 7; i++)
+            barras[i] = new Texture("barra" + (i + 1) + ".png");
+
+        venceuImg = new Texture("venceu.png");
+        perdeuImg = new Texture("perdeu.png");
+
+        // Sprites principais
+        playerBase[0] = new Texture("player_1.png"); // idle
+        playerBase[1] = new Texture("player_2.png"); // dano
+        playerBase[2] = new Texture("player_3.png"); // fatal
+
+        enemyBase[0] = new Texture("enemy1_1.png");
+        enemyBase[1] = new Texture("enemy1_2.png");
+        enemyBase[2] = new Texture("enemy1_3.png");
+
+        // Golpes nomeados
+        for (int i = 0; i < 3; i++) {
+            playerGolpes[i] = new Texture("player_golpe" + (i + 1) + ".png");
+            enemyGolpes[i] = new Texture("enemy1_golpe" + (i + 1) + ".png");
+        }
+
+        // Áudios
+        backgroundMusic = Gdx.audio.newMusic(Gdx.files.internal("music.mp3"));
+        punchSound = Gdx.audio.newSound(Gdx.files.internal("punch.mp3"));
+        backgroundMusic.setLooping(true);
+        backgroundMusic.setVolume(0.5f);
+        backgroundMusic.play();
+
+        // Lutadores (posição original + ajustados levemente à esquerda)
+        playerX = 300;
+        enemyX = 390;
+        playerYBase = 80; // posição original restaurada
+        enemyYBase = 80;
+
+
+        playerAtual = playerBase[0];
+        enemyAtual = enemyBase[0];
+
+        resetRodada();
+    }
+
+    private void resetRodada() {
+        pedaladas = 0;
+        tempo = 0;
+        animando = false;
+        aguardandoProximoRound = false;
+        playerAtual = playerBase[0];
+        enemyAtual = enemyBase[0];
+    }
+
+    @Override
+    public void render() {
+        input();
+        logic();
+        draw();
+    }
+
+    private void input() {
+        if (!emContagem && jogoAtivo && !aguardandoProximoRound && Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
+            pedaladas++;
+            if (pedaladas >= META_PEDALADAS) finalizarRound(true);
+        }
+    }
+
+    private void logic() {
+        if (!jogoAtivo) return;
+
+        // Idle motion timer
+        tempoIdle += Gdx.graphics.getDeltaTime();
+
+        // Aguarda o tempo antes de iniciar próxima contagem
+        if (aguardandoProximoRound) {
+            tempoAguardar += Gdx.graphics.getDeltaTime();
+            if (tempoAguardar >= delayAtual) {
+                emContagem = true;
+                tempoContagem = 0f;
+                aguardandoProximoRound = false;
+                tempoAguardar = 0f;
+                delayAtual = DELAY_NORMAL;
+            }
+            return;
+        }
+
+        // Retorna para idle após animação
+        if (animando) {
+            tempoAnimacao += Gdx.graphics.getDeltaTime();
+            if (tempoAnimacao >= DURACAO_ANIMACAO) {
+                animando = false;
+                playerAtual = playerBase[0];
+                enemyAtual = enemyBase[0];
+            }
+        }
+
+        // Contagem 3,2,1
+        if (emContagem) {
+            tempoContagem += Gdx.graphics.getDeltaTime();
+            if (tempoContagem >= DURACAO_CONTAGEM) {
+                emContagem = false;
+                tempoContagem = 0f;
+                resetRodada();
+            }
+            return;
+        }
+
+        // Tempo do round
+        tempo += Gdx.graphics.getDeltaTime();
+        if (tempo >= LIMITE_TEMPO && pedaladas < META_PEDALADAS) {
+            finalizarRound(false);
+        }
+    }
+
+    private void finalizarRound(boolean jogadorAcertou) {
+        if (!jogoAtivo) return;
+        animando = true;
+        tempoAnimacao = 0f;
+
+        boolean golpeFatal = false;
+
+        if (jogadorAcertou) {
+            enemyLives = Math.max(0, enemyLives - 1);
+            punchSound.play();
+            playerAtual = playerGolpes[indiceGolpePlayer];
+            indiceGolpePlayer = (indiceGolpePlayer + 1) % 3;
+
+            if (enemyLives > 0)
+                enemyAtual = enemyBase[1];
+            else {
+                enemyAtual = enemyBase[2];
+                golpeFatal = true;
+            }
+
+        } else {
+            playerLives = Math.max(0, playerLives - 1);
+            punchSound.play();
+            enemyAtual = enemyGolpes[indiceGolpeEnemy];
+            indiceGolpeEnemy = (indiceGolpeEnemy + 1) % 3;
+
+            if (playerLives > 0)
+                playerAtual = playerBase[1];
+            else {
+                playerAtual = playerBase[2];
+                golpeFatal = true;
+            }
+        }
+
+        // Verifica fim de jogo
+        if (playerLives <= 0 || enemyLives <= 0) {
+            jogoAtivo = false;
+            backgroundMusic.stop();
+            jogadorVenceu = enemyLives <= 0;
+        } else {
+            aguardandoProximoRound = true;
+            tempoAguardar = 0f;
+            delayAtual = golpeFatal ? DELAY_FATAL : DELAY_NORMAL;
+        }
+    }
+
+    private void draw() {
+        ScreenUtils.clear(Color.BLACK);
+        viewport.apply();
+        spriteBatch.setProjectionMatrix(camera.combined);
+        spriteBatch.begin();
+
+        spriteBatch.draw(background, 0, 0, viewport.getWorldWidth(), viewport.getWorldHeight());
+
+        // Idle movement (só quando não estiver animando nem em contagem)
+        float offsetPlayerY = 0f, offsetEnemyY = 0f;
+        if (!animando && !emContagem && jogoAtivo) {
+            offsetPlayerY = (float) Math.sin(tempoIdle * Math.PI * FREQUENCIA_IDLE) * AMPLITUDE_IDLE;
+            offsetEnemyY = (float) Math.sin((tempoIdle * Math.PI * FREQUENCIA_IDLE) + Math.PI) * AMPLITUDE_IDLE;
+            // inimigo fora de fase (movimento alternado)
+        }
+
+        spriteBatch.draw(playerAtual, playerX, playerYBase + offsetPlayerY);
+        spriteBatch.draw(enemyAtual, enemyX, enemyYBase + offsetEnemyY);
+
+        // Vidas jogador e inimigo
+        float heartSize = 32, spacing = 5;
+        for (int i = 0; i < MAX_LIVES; i++) {
+            float x = 20 + (heartSize + spacing) * i;
+            float y = viewport.getWorldHeight() - heartSize - 20;
+            spriteBatch.draw(i < playerLives ? heartFull : heartEmpty, x, y, heartSize, heartSize);
+        }
+        for (int i = 0; i < MAX_LIVES; i++) {
+            float x = viewport.getWorldWidth() - ((heartSize + spacing) * (i + 1)) - 20;
+            float y = viewport.getWorldHeight() - heartSize - 20;
+            spriteBatch.draw(i < enemyLives ? heartFull : heartEmpty, x, y, heartSize, heartSize);
+        }
+
+        // Tela final (alinhada com a barra)
+        if (!jogoAtivo) {
+            Texture fim = jogadorVenceu ? venceuImg : perdeuImg;
+            float tx = 300, ty = 150;
+            float x = (viewport.getWorldWidth() - tx) / 2;
+            float y = viewport.getWorldHeight() - ty - 60;
+            spriteBatch.draw(fim, x, y, tx, ty);
+            spriteBatch.end();
+            return;
+        }
+
+        // Contagem regressiva
+        if (emContagem) {
+            Texture img = null;
+            if (tempoContagem < 1f) img = count3;
+            else if (tempoContagem < 2f) img = count2;
+            else if (tempoContagem < 3f) img = count1;
+            if (img != null) {
+                float t = 120;
+                float x = (viewport.getWorldWidth() - t) / 2;
+                float y = viewport.getWorldHeight() - t - 50;
+                spriteBatch.draw(img, x, y, t, t);
+            }
+        }
+
+        // Barra de pedaladas
+        if (!emContagem && jogoAtivo) {
+            int estagio = calcularEstagioBarra(pedaladas);
+            Texture barra = barras[estagio - 1];
+            float tx = 200, ty = 40;
+            float x = (viewport.getWorldWidth() - tx) / 2;
+            float y = viewport.getWorldHeight() - ty - 60;
+            spriteBatch.draw(barra, x, y, tx, ty);
+        }
+
+        spriteBatch.end();
+    }
+
+    private int calcularEstagioBarra(int pedaladas) {
+        if (pedaladas >= META_PEDALADAS) return 7;
+        float proporcao = (float) pedaladas / META_PEDALADAS;
+        int estagio = (int) Math.ceil(proporcao * 6);
+        return Math.min(Math.max(estagio, 1), 6);
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        viewport.update(width, height, true);
+    }
+
+    @Override
+    public void pause() {}
+    @Override
+    public void resume() {}
+
+    @Override
+    public void dispose() {
+        spriteBatch.dispose();
+        background.dispose();
+        heartFull.dispose();
+        heartEmpty.dispose();
+        count3.dispose();
+        count2.dispose();
+        count1.dispose();
+        venceuImg.dispose();
+        perdeuImg.dispose();
+
+        for (Texture t : barras) t.dispose();
+        for (Texture t : playerBase) t.dispose();
+        for (Texture t : enemyBase) t.dispose();
+        for (Texture t : playerGolpes) t.dispose();
+        for (Texture t : enemyGolpes) t.dispose();
+
+        backgroundMusic.dispose();
+        punchSound.dispose();
+    }
+}
