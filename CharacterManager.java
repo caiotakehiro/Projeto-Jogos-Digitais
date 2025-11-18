@@ -6,20 +6,16 @@ public class CharacterManager {
     private AssetManager assets;
     private GameState state;
 
-    // Posições
     public float playerX, playerYBase;
     public float enemyX, enemyYBase;
 
-    // Sprites atuais
     public Texture playerAtual;
     public Texture enemyAtual;
     public Texture background;
 
-    // Sprites para delay
     public Texture playerSpriteAntesDelay;
     public Texture enemySpriteAntesDelay;
 
-    // Arrays atuais de sprites do inimigo
     public Texture[] enemyBase;
     public Texture[] enemyGolpes;
 
@@ -38,19 +34,16 @@ public class CharacterManager {
 
     public void inicializarSprites() {
         background = assets.backgrounds[state.nivelAtual - 1];
-        playerAtual = assets.playerBase[0]; // player_1.png
+        playerAtual = assets.playerBase[0];
         enemyBase = assets.inimigoBaseNivel[state.nivelAtual - 1];
         enemyGolpes = assets.inimigoGolpesNivel[state.nivelAtual - 1];
-        enemyAtual = enemyBase[0]; // enemy1_1.png
+        enemyAtual = enemyBase[0];
     }
 
     public void avancarNivel() {
         state.indiceGolpeEnemy = 0;
-        state.nivelAtual++;
 
         if (state.nivelAtual > GameState.TOTAL_NIVEIS) {
-            state.jogoAtivo = false;
-            state.jogadorVenceu = true;
             return;
         }
 
@@ -70,14 +63,11 @@ public class CharacterManager {
         playerAtual = assets.playerGolpes[state.indiceGolpePlayer];
         state.indiceGolpePlayer = (state.indiceGolpePlayer + 1) % 3;
 
-        // Verificar se foi golpe fatal
         boolean golpeFatal = state.enemyLives <= 0;
 
         if (!golpeFatal) {
-            // Golpe normal 
             enemyAtual = enemyBase[1];
         } else {
-            // Golpe fatal 
             enemyAtual = enemyBase[2];
             playerSpriteAntesDelay = playerAtual;
             enemySpriteAntesDelay = enemyAtual;
@@ -94,14 +84,11 @@ public class CharacterManager {
         enemyAtual = enemyGolpes[state.indiceGolpeEnemy];
         state.indiceGolpeEnemy = (state.indiceGolpeEnemy + 1) % 3;
 
-        // Verificar se foi golpe fatal
         boolean golpeFatal = state.playerLives <= 0;
 
         if (!golpeFatal) {
-            // Golpe normal 
             playerAtual = assets.playerBase[1];
         } else {
-            // Golpe fatal 
             playerAtual = assets.playerBase[2];
             playerSpriteAntesDelay = playerAtual;
             enemySpriteAntesDelay = enemyAtual;
@@ -112,9 +99,8 @@ public class CharacterManager {
     }
 
     public void resetSpritesParaPadrao() {
-        // Volta para padrão 
-        playerAtual = assets.playerBase[0]; // player_1.png
-        enemyAtual = enemyBase[0]; // enemy1_1.png
+        playerAtual = assets.playerBase[0];
+        enemyAtual = enemyBase[0];
     }
 
     public void resetSpritesAposAnimacao() {
