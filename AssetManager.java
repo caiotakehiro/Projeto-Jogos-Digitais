@@ -5,7 +5,6 @@ import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
 
 public class AssetManager {
-    // Texturas - Personagens
     public Texture telaPretaImg;
     public Texture[] backgrounds = new Texture[3];
     public Texture[] playerBase = new Texture[3];
@@ -13,33 +12,31 @@ public class AssetManager {
     public Texture[][] inimigoBaseNivel = new Texture[3][3];
     public Texture[][] inimigoGolpesNivel = new Texture[3][3];
 
-    // Texturas - UI
     public Texture heartFull, heartEmpty;
     public Texture count3, count2, count1;
     public Texture[] barras = new Texture[7];
     public Texture venceuImg, perdeuImg;
     public Texture pressSpaceImg;
 
-    // Texturas - Menu
     public Texture playImg;
     public Texture restartImg;
     public Texture fundoMenuImg;
     public Texture cimaMenuImg;
     public Texture menuImg;
 
-    // Áudio
+    public Texture starFull, starEmpty;
+    public Texture[] numerosPontuacao = new Texture[10];
+    public Texture pontoDecimal;
+
     public Music backgroundMusic;
     public Sound punchSound;
 
     public void carregarTexturas() {
-        // Backgrounds
         backgrounds[0] = new Texture("background1.jpg");
         backgrounds[1] = new Texture("background2.jpg");
         backgrounds[2] = new Texture("background3.jpg");
         telaPretaImg = new Texture("preto.png");
 
-
-        // UI
         heartFull = new Texture("heart_full.png");
         heartEmpty = new Texture("heart_empty.png");
         count3 = new Texture("3.png");
@@ -54,14 +51,21 @@ public class AssetManager {
         perdeuImg = new Texture("perdeu.png");
         pressSpaceImg = new Texture("pressspace.png");
 
-        // Menu
         playImg = new Texture("play.png");
         restartImg = new Texture("restart.png");
         fundoMenuImg = new Texture("fundomenu.png");
         cimaMenuImg = new Texture("menucima.png");
         menuImg = new Texture("menu.png");
 
-        // Player
+        starFull = new Texture("star.png");
+        starEmpty = new Texture("starempty.png");
+
+        for (int i = 0; i < 10; i++) {
+            numerosPontuacao[i] = new Texture("num" + i + ".png");
+        }
+
+        pontoDecimal = new Texture("ponto.png");
+
         playerBase[0] = new Texture("player_1.png");
         playerBase[1] = new Texture("player_2.png");
         playerBase[2] = new Texture("player_3.png");
@@ -98,13 +102,15 @@ public class AssetManager {
         disposarArray(playerBase);
         disposarArray(playerGolpes);
         disposarArray(barras);
+        disposarArray(numerosPontuacao);
 
         for (Texture[] array : inimigoBaseNivel) disposarArray(array);
         for (Texture[] array : inimigoGolpesNivel) disposarArray(array);
 
         disposarIndividual(heartFull, heartEmpty, count3, count2, count1,
             venceuImg, perdeuImg, pressSpaceImg, playImg,
-            restartImg, fundoMenuImg, cimaMenuImg, menuImg);
+            restartImg, fundoMenuImg, cimaMenuImg, menuImg,
+            starFull, starEmpty, pontoDecimal);
 
         if (backgroundMusic != null) backgroundMusic.dispose();
         if (punchSound != null) punchSound.dispose();
