@@ -13,12 +13,10 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 
 public class Main implements ApplicationListener {
 
-    // Core
     private SpriteBatch spriteBatch;
     private FitViewport viewport;
     private OrthographicCamera camera;
 
-    // Gerenciadores
     private GameState state;
     private AssetManager assets;
     private CharacterManager characters;
@@ -61,9 +59,23 @@ public class Main implements ApplicationListener {
     }
 
     private void input() {
+        processarInputTelaFinal();
+
+        if (state.mostrandoPontuacao || state.aguardandoTelaFim) {
+            return;
+        }
+
         processarInputMenu();
         if (state.menuAtivo) return;
         processarInputJogo();
+    }
+
+    private void processarInputTelaFinal() {
+        if (!state.jogoAtivo && state.aguardandoTelaFim) {
+            if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE) || Gdx.input.justTouched()) {
+                reiniciarJogo();
+            }
+        }
     }
 
     private void processarInputMenu() {
@@ -117,6 +129,10 @@ public class Main implements ApplicationListener {
     }
 
     private void processarInputJogo() {
+        if (state.mostrandoPontuacao || state.aguardandoTelaFim || state.emTransicao || state.emDelayEntreFases) {
+            return;
+        }
+
         if (state.aguardandoInicio && Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
             iniciarRound();
             return;
@@ -131,8 +147,15 @@ public class Main implements ApplicationListener {
     }
 
     private boolean podePedalar() {
-        return !state.aguardandoInicio && !state.emContagem && state.jogoAtivo &&
-            !state.aguardandoProximoRound && !state.emDelayEntreFases && !state.jogoPausado;
+        return !state.aguardandoInicio &&
+            !state.emContagem &&
+            state.jogoAtivo &&
+            !state.aguardandoProximoRound &&
+            !state.emDelayEntreFases &&
+            !state.jogoPausado &&
+            !state.mostrandoPontuacao &&
+            !state.aguardandoTelaFim &&
+            !state.emTransicao;
     }
 
     private void iniciarRound() {
@@ -143,6 +166,11 @@ public class Main implements ApplicationListener {
 
     private void logic() {
         if (!state.jogoAtivo || state.jogoPausado) return;
+
+        if (state.mostrandoPontuacao) {
+            processarMostrarPontuacao();
+            return;
+        }
 
         if (state.emTransicao) {
             processarTransicao();
@@ -175,6 +203,27 @@ public class Main implements ApplicationListener {
         processarTempoRound();
     }
 
+    private void processarMostrarPontuacao() {
+        state.tempoMostrarPontuacao += Gdx.graphics.getDeltaTime();
+        if (state.tempoMostrarPontuacao >= GameState.DURACAO_MOSTRAR_PONTUACAO) {
+            state.mostrandoPontuacao = false;
+            state.tempoMostrarPontuacao = 0f;
+
+            if (state.nivelAtual >= GameState.TOTAL_NIVEIS && state.enemyLives <= 0) {
+                state.jogoAtivo = false;
+                state.jogadorVenceu = true;
+                state.aguardandoTelaFim = true;
+            } else if (state.playerLives <= 0) {
+                state.jogoAtivo = false;
+                state.jogadorVenceu = false;
+                state.aguardandoTelaFim = true;
+            } else {
+                state.emTransicao = true;
+                state.tempoTransicao = 0f;
+            }
+        }
+    }
+
     private void processarDelayEntreFases() {
         state.tempoDelayEntreFases += Gdx.graphics.getDeltaTime();
         if (state.tempoDelayEntreFases >= GameState.DELAY_ENTRE_FASES) {
@@ -191,11 +240,9 @@ public class Main implements ApplicationListener {
             state.tempoAguardar = 0f;
 
             if (state.golpeFatal) {
-                // Golpe fatal - avançar para próximo nível ou fim de jogo
                 state.emDelayEntreFases = true;
                 state.tempoDelayEntreFases = 0f;
             } else {
-                // Golpe normal - reiniciar round
                 characters.resetSpritesParaPadrao();
                 state.emContagem = true;
                 state.tempoContagem = 0f;
@@ -209,7 +256,6 @@ public class Main implements ApplicationListener {
         if (state.tempoAnimacao >= GameState.DURACAO_ANIMACAO) {
             state.animando = false;
 
-            // Resetar para padrão após animação 
             if (!state.golpeFatal) {
                 characters.resetSpritesParaPadrao();
             }
@@ -242,11 +288,12 @@ public class Main implements ApplicationListener {
         boolean golpeFatal;
         if (jogadorAcertou) {
             golpeFatal = characters.executarGolpeJogador();
+            state.calcularPontuacaoRound(state.pedaladas, state.tempo);
         } else {
             golpeFatal = characters.executarGolpeInimigo();
+            state.calcularPontuacaoRound(state.pedaladas, state.tempo);
         }
 
-        // Configurar delay
         if (golpeFatal) {
             state.delayAtual = GameState.DELAY_FATAL;
         } else {
@@ -255,36 +302,28 @@ public class Main implements ApplicationListener {
 
         state.aguardandoProximoRound = true;
         state.tempoAguardar = 0f;
-
-        verificarFimDeJogo();
-    }
-
-    private void verificarFimDeJogo() {
-        if (state.playerLives <= 0) {
-            state.jogoAtivo = false;
-            state.jogadorVenceu = false;
-            assets.backgroundMusic.stop();
-        }
     }
 
     private void avancarNivelAposDelay() {
         if (state.enemyLives <= 0) {
+            state.mostrandoPontuacao = true;
+            state.tempoMostrarPontuacao = 0f;
+
             if (state.nivelAtual >= GameState.TOTAL_NIVEIS) {
-                characters.avancarNivel();
                 assets.backgroundMusic.stop();
-            } else {
-                state.emTransicao = true;
-                state.tempoTransicao = 0f;
             }
         } else {
-            state.jogoAtivo = false;
-            state.jogadorVenceu = false;
+            state.mostrandoPontuacao = true;
+            state.tempoMostrarPontuacao = 0f;
             assets.backgroundMusic.stop();
         }
     }
 
     private void reiniciarJogo() {
         state.reiniciarJogo();
+        state.resetPontuacoes();
+        state.mostrandoPontuacaoFinal = false;
+        state.aguardandoTelaFim = false;
         characters.inicializarSprites();
 
         if (!assets.backgroundMusic.isPlaying()) {
@@ -298,7 +337,6 @@ public class Main implements ApplicationListener {
         spriteBatch.setProjectionMatrix(camera.combined);
         spriteBatch.begin();
 
-        // transição
         if (state.emTransicao) {
             spriteBatch.draw(assets.telaPretaImg, 0, 0, viewport.getWorldWidth(), viewport.getWorldHeight());
             spriteBatch.end();
@@ -314,6 +352,11 @@ public class Main implements ApplicationListener {
         }
 
         desenharJogo();
+
+        if (state.mostrandoPontuacao) {
+            desenharPontuacao();
+        }
+
         spriteBatch.end();
     }
 
@@ -328,17 +371,24 @@ public class Main implements ApplicationListener {
     }
 
     private void iniciarProximoNivelAposTransicao() {
-        characters.avancarNivel();
+        state.nivelAtual++;
 
-        if (!state.jogoAtivo) {
+        if (state.nivelAtual > GameState.TOTAL_NIVEIS) {
+            state.jogoAtivo = false;
+            state.jogadorVenceu = true;
             assets.backgroundMusic.stop();
             return;
         }
 
+        characters.avancarNivel();
         state.atualizarDificuldade();
         state.aguardandoInicio = true;
         state.resetRodada();
-        characters.resetSpritesParaPadrao();
+        state.reiniciarPontuacoesNivel();
+
+        if (!assets.backgroundMusic.isPlaying()) {
+            assets.backgroundMusic.play();
+        }
     }
 
     private void desenharMenu() {
@@ -396,7 +446,7 @@ public class Main implements ApplicationListener {
             desenharPressSpace();
         }
 
-        if (!state.jogoAtivo) {
+        if (!state.jogoAtivo && state.aguardandoTelaFim) {
             desenharTelaFim();
             return;
         }
@@ -414,7 +464,6 @@ public class Main implements ApplicationListener {
     private void desenharVidas() {
         float heartSize = 32, spacing = 5;
 
-        // Vidas jogador
         for (int i = 0; i < GameState.MAX_LIVES; i++) {
             float x = 20 + (heartSize + spacing) * i;
             float y = viewport.getWorldHeight() - heartSize - 20;
@@ -422,7 +471,6 @@ public class Main implements ApplicationListener {
             spriteBatch.draw(t, x, y, heartSize, heartSize);
         }
 
-        // Vidas inimigo
         for (int i = 0; i < GameState.MAX_LIVES; i++) {
             float x = viewport.getWorldWidth() - ((heartSize + spacing) * (i + 1)) - 20;
             float y = viewport.getWorldHeight() - heartSize - 20;
@@ -476,6 +524,75 @@ public class Main implements ApplicationListener {
         float proporcao = (float) pedaladas / state.metaPedaladas;
         int estagio = (int) Math.ceil(proporcao * 6);
         return Math.min(Math.max(estagio, 1), 6);
+    }
+
+    private void desenharPontuacao() {
+        spriteBatch.setColor(0, 0, 0, 0.7f);
+        spriteBatch.draw(assets.telaPretaImg, 0, 0, viewport.getWorldWidth(), viewport.getWorldHeight());
+        spriteBatch.setColor(Color.WHITE);
+
+        int estrelas = state.getEstrelas();
+
+        float centerX = viewport.getWorldWidth() / 2;
+        float estrelasY = viewport.getWorldHeight() / 2 + 40;
+
+        desenharEstrelas(centerX, estrelasY, estrelas);
+
+        if (!state.pontuacoesRoundAtual.isEmpty()) {
+            desenharMediasRounds(centerX, estrelasY - 80);
+        }
+    }
+
+    private void desenharMediasRounds(float centerX, float startY) {
+        float numeroWidth = 20f;
+        float numeroHeight = 30f;
+        float spacing = 15f;
+
+        java.util.List<Float> pontuacoesCompletas = state.getPontuacoesRoundCompletas();
+        int totalRounds = 5;
+
+        for (int i = 0; i < totalRounds; i++) {
+            float media = pontuacoesCompletas.get(i);
+
+            float roundX = centerX - ((totalRounds - 1) * (numeroWidth * 4 + spacing)) / 2;
+            roundX += i * (numeroWidth * 4 + spacing);
+
+            String mediaStr = String.format("%.1f", media);
+            float textWidth = mediaStr.length() * numeroWidth;
+            float numberX = roundX - textWidth / 2 + numeroWidth * 0.5f;
+            float numberY = startY;
+
+            desenharNumero(mediaStr, numberX, numberY, numeroWidth, numeroHeight);
+        }
+    }
+
+    private void desenharNumero(String numero, float x, float y, float width, float height) {
+        for (int i = 0; i < numero.length(); i++) {
+            char c = numero.charAt(i);
+            Texture tex = null;
+
+            if (c >= '0' && c <= '9') {
+                tex = assets.numerosPontuacao[c - '0'];
+            } else if (c == '.' && assets.pontoDecimal != null) {
+                tex = assets.pontoDecimal;
+            }
+
+            if (tex != null) {
+                spriteBatch.draw(tex, x + i * width, y, width, height);
+            }
+        }
+    }
+
+    private void desenharEstrelas(float x, float y, int estrelasCheias) {
+        float starSize = 50f;
+        float spacing = 10f;
+        float totalWidth = 3 * starSize + 2 * spacing;
+        float startX = x - totalWidth / 2;
+
+        for (int i = 0; i < 3; i++) {
+            Texture star = (i < estrelasCheias) ? assets.starFull : assets.starEmpty;
+            spriteBatch.draw(star, startX + i * (starSize + spacing), y, starSize, starSize);
+        }
     }
 
     @Override
